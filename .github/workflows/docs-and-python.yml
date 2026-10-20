@@ -1,0 +1,25 @@
+name: Documentation and Python checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check English documentation
+        run: python3 scripts/check_documentation_language.py
+      - name: Check localization resources
+        run: python3 scripts/check_localizations.py
+      - name: Run package-inspector regression tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Validate SQLite schema
+        run: python3 scripts/check_sql_schema.py
+      - name: Check FSRS fail-closed UI contract
+        run: python3 scripts/verify_phase0_6.py

@@ -1,0 +1,8 @@
+.dart_tool/
+.flutter-plugins*
+build/
+android/.gradle/
+ios/Pods/
+ios/Flutter/
+.pub-cache/
+*.log

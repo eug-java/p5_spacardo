@@ -1,0 +1,12 @@
+[package]
+name = "srs_bridge"
+version = "0.0.1"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[dependencies]
+srs_fsrs = { path = "../srs_fsrs" }
+srs_anki_codec = { path = "../srs_anki_codec" }

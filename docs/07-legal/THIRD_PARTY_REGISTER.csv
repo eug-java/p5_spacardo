@@ -1,0 +1,9 @@
+name,version,source_url,spdx_license,approval_status,notes
+Anki source,NOT INCLUDED,https://github.com/ankitects/anki,AGPL-3.0-or-later,EXCLUDED,Do not vendor or link in MVP
+fsrs-rs,TBD,https://github.com/open-spaced-repetition/fsrs-rs,BSD-3-Clause,PROPOSED,Check exact version and dependencies
+Flutter SDK,TBD,https://github.com/flutter/flutter,BSD-3-Clause,PROPOSED,Check bundled third party notices
+Riverpod,TBD,https://github.com/rrousselGit/riverpod,MIT,PROPOSED,Transitive audit pending
+Drift,TBD,https://github.com/simolus3/drift,MIT,PROPOSED,Web SQLite components audit pending
+flutter_rust_bridge,TBD,https://github.com/fzyzcjy/flutter_rust_bridge,MIT,PROPOSED,Codegen and WASM components audit pending
+SQLite WebAssembly,TBD,TO_SELECT,UNKNOWN,BLOCKED,Choose exact distribution and review license
+Anki test fixtures,SELF MADE,LOCAL,SELF OWNED,PROPOSED,Only synthetic content created in-house
