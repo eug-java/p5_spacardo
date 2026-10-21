@@ -56,3 +56,13 @@ Thumbs.db
 
 # Local logs
 *.log
+
+# Python generated files
+__pycache__/
+*.py[cod]
+
+# Local development backups
+*.bak_phase*
+
+# Generated native Android binaries
+apps/mobile/android/app/src/main/jniLibs/**/*.so

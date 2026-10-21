@@ -182,6 +182,138 @@ class _ShellState extends State<_Shell> {
   }
 }
 
+/// Owns the controller until the dialog route has finished disposing.
+class _SingleTextDialog extends StatefulWidget {
+  const _SingleTextDialog({
+    required this.title,
+    required this.label,
+    required this.cancel,
+    required this.save,
+    this.initialValue = '',
+  });
+
+  final String title;
+  final String label;
+  final String cancel;
+  final String save;
+  final String initialValue;
+
+  @override
+  State<_SingleTextDialog> createState() => _SingleTextDialogState();
+}
+
+class _SingleTextDialogState extends State<_SingleTextDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(widget.title),
+        content: TextField(
+          controller: _controller,
+          autofocus: true,
+          maxLength: 120,
+          decoration: InputDecoration(labelText: widget.label),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(widget.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, _controller.text.trim()),
+            child: Text(widget.save),
+          ),
+        ],
+      );
+}
+
+/// Owns both card controllers for the lifetime of the dialog route.
+class _CardTextDialog extends StatefulWidget {
+  const _CardTextDialog({
+    required this.title,
+    required this.frontLabel,
+    required this.backLabel,
+    required this.cancel,
+    required this.save,
+    this.initialFront = '',
+    this.initialBack = '',
+  });
+
+  final String title;
+  final String frontLabel;
+  final String backLabel;
+  final String cancel;
+  final String save;
+  final String initialFront;
+  final String initialBack;
+
+  @override
+  State<_CardTextDialog> createState() => _CardTextDialogState();
+}
+
+class _CardTextDialogState extends State<_CardTextDialog> {
+  late final TextEditingController _front;
+  late final TextEditingController _back;
+
+  @override
+  void initState() {
+    super.initState();
+    _front = TextEditingController(text: widget.initialFront);
+    _back = TextEditingController(text: widget.initialBack);
+  }
+
+  @override
+  void dispose() {
+    _front.dispose();
+    _back.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(widget.title),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _front,
+                maxLength: 5000,
+                decoration: InputDecoration(labelText: widget.frontLabel),
+              ),
+              TextField(
+                controller: _back,
+                maxLength: 5000,
+                decoration: InputDecoration(labelText: widget.backLabel),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(widget.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, [_front.text, _back.text]),
+            child: Text(widget.save),
+          ),
+        ],
+      );
+}
+
 class _HomePage extends StatefulWidget {
   const _HomePage({required this.database, required this.onDeckSelected});
   final LocalDatabase database;
@@ -201,28 +333,16 @@ class _HomePageState extends State<_HomePage> {
   void _reload() => decks = widget.database.listDecks();
 
   Future<void> _addDeck() async {
-    final controller = TextEditingController();
+    final l = AppLocalizations.of(context)!;
     final title = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(AppLocalizations.of(context)!.createDeck),
-        content: TextField(
-            controller: controller,
-            autofocus: true,
-            maxLength: 120,
-            decoration: InputDecoration(
-                labelText: AppLocalizations.of(context)!.deckName)),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(AppLocalizations.of(context)!.cancel)),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: Text(AppLocalizations.of(context)!.save)),
-        ],
+      builder: (_) => _SingleTextDialog(
+        title: l.createDeck,
+        label: l.deckName,
+        cancel: l.cancel,
+        save: l.save,
       ),
     );
-    controller.dispose();
     if (title == null || title.isEmpty) return;
     try {
       await widget.database.addDeck(title);
@@ -241,28 +361,16 @@ class _HomePageState extends State<_HomePage> {
   }
 
   Future<void> _renameDeck(DeckRecord deck) async {
-    final controller = TextEditingController(text: deck.title);
     final title = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Rename deck'),
-        content: TextField(
-            controller: controller,
-            autofocus: true,
-            maxLength: 120,
-            decoration: const InputDecoration(labelText: 'Deck name')),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () =>
-                  Navigator.pop(dialogContext, controller.text.trim()),
-              child: const Text('Save')),
-        ],
+      builder: (_) => _SingleTextDialog(
+        title: 'Rename deck',
+        label: 'Deck name',
+        cancel: 'Cancel',
+        save: 'Save',
+        initialValue: deck.title,
       ),
     );
-    controller.dispose();
     if (title == null || title.isEmpty || title == deck.title || !mounted) {
       return;
     }
@@ -455,36 +563,17 @@ class _PracticePageState extends State<_PracticePage> {
 
   Future<void> _addCard() async {
     if (widget.deckId == null) return;
-    final front = TextEditingController();
-    final back = TextEditingController();
+    final l = AppLocalizations.of(context)!;
     final values = await showDialog<List<String>>(
-        context: context,
-        builder: (dialogContext) {
-          final l = AppLocalizations.of(context)!;
-          return AlertDialog(
-              title: Text(l.createCard),
-              content: Column(mainAxisSize: MainAxisSize.min, children: [
-                TextField(
-                    controller: front,
-                    decoration: InputDecoration(labelText: l.cardFront),
-                    maxLength: 5000),
-                TextField(
-                    controller: back,
-                    decoration: InputDecoration(labelText: l.cardBack),
-                    maxLength: 5000),
-              ]),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    child: Text(l.cancel)),
-                FilledButton(
-                    onPressed: () =>
-                        Navigator.pop(dialogContext, [front.text, back.text]),
-                    child: Text(l.save)),
-              ]);
-        });
-    front.dispose();
-    back.dispose();
+      context: context,
+      builder: (_) => _CardTextDialog(
+        title: l.createCard,
+        frontLabel: l.cardFront,
+        backLabel: l.cardBack,
+        cancel: l.cancel,
+        save: l.save,
+      ),
+    );
     if (values == null) return;
     try {
       await widget.database.addBasicCard(widget.deckId!, values[0], values[1]);
@@ -506,36 +595,18 @@ class _PracticePageState extends State<_PracticePage> {
   }
 
   Future<void> _editCard(ManagedCardRecord card) async {
-    final front = TextEditingController(text: card.front);
-    final back = TextEditingController(text: card.back);
     final result = await showDialog<List<String>>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Edit card'),
-        content: SingleChildScrollView(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-              controller: front,
-              maxLength: 5000,
-              decoration: const InputDecoration(labelText: 'Front')),
-          TextField(
-              controller: back,
-              maxLength: 5000,
-              decoration: const InputDecoration(labelText: 'Back')),
-        ])),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () =>
-                  Navigator.pop(dialogContext, [front.text, back.text]),
-              child: const Text('Save')),
-        ],
+      builder: (_) => _CardTextDialog(
+        title: 'Edit card',
+        frontLabel: 'Front',
+        backLabel: 'Back',
+        cancel: 'Cancel',
+        save: 'Save',
+        initialFront: card.front,
+        initialBack: card.back,
       ),
     );
-    front.dispose();
-    back.dispose();
     if (result == null || !mounted) return;
     try {
       await widget.database.updateBasicCard(card.id, result[0], result[1]);
@@ -746,8 +817,10 @@ class _PracticePageState extends State<_PracticePage> {
                     onPressed: () => setState(() => revealed = true),
                     child: Text(l.showAnswer))
               else ...[
-                Text(l.provisionalSchedulingNotice,
-                    textAlign: TextAlign.center),
+                const Text(
+                  'Review intervals are calculated using FSRS.',
+                  textAlign: TextAlign.center,
+                ),
                 Wrap(alignment: WrapAlignment.center, spacing: 8, children: [
                   OutlinedButton(
                       onPressed: _ratingBusy ? null : () => _rate(card, 1),
