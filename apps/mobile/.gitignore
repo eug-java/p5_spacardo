@@ -6,3 +6,31 @@ ios/Pods/
 ios/Flutter/
 .pub-cache/
 *.log
+
+# Rust build artifacts
+**/target/
+
+# Flutter / Dart
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/build/
+**/.packages
+**/.pub-cache/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Local databases and backups
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.bak
+*.bak_*
+
+# OS files
+.DS_Store
+Thumbs.db
