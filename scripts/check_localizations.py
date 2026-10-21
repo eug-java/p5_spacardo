@@ -10,6 +10,10 @@ base = root / 'apps/mobile/lib/l10n'
 expected = {'en', 'es', 'pt_BR', 'de', 'fr', 'ru', 'zh_CN', 'ja', 'ko', 'id', 'hi', 'ar', 'tr', 'vi', 'it', 'zh_TW', 'pl', 'uk'}
 errors = []
 files = {p.stem.removeprefix('app_'): p for p in base.glob('app_*.arb')}
+# Flutter requires base locales for regional translations.
+fallback_locales = {'pt', 'zh'}
+expected = expected | fallback_locales
+
 if files.keys() != expected:
     errors.append(f'Locale difference: missing={sorted(expected - files.keys())}, extra={sorted(files.keys() - expected)}')
 english = json.loads((base / 'app_en.arb').read_text(encoding='utf-8'))
