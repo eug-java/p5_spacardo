@@ -1,0 +1,59 @@
+name: Flutter and native FSRS integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-native-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+          components: rustfmt, clippy
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libsqlite3-dev
+      - name: Validate Rust
+        run: |
+          cargo fmt --manifest-path crates/Cargo.toml --all -- --check
+          cargo clippy --manifest-path crates/Cargo.toml --all-targets -- -D warnings
+          cargo test --manifest-path crates/Cargo.toml
+          cargo build --manifest-path crates/Cargo.toml --release
+          test -s crates/target/release/libsrs_bridge.so
+      - name: Flutter dependencies and analyze
+        working-directory: apps/mobile
+        run: |
+          flutter pub get
+          flutter gen-l10n
+          flutter analyze
+      - name: Flutter tests including native E2E
+        working-directory: apps/mobile
+        env:
+          SPACARDO_FSRS_LIBRARY: ${{ github.workspace }}/crates/target/release/libsrs_bridge.so
+        run: flutter test --reporter expanded
+      - name: Build Linux application
+        working-directory: apps/mobile
+        run: |
+          flutter create --platforms=linux --project-name p5_spacardo .
+          flutter build linux --release
