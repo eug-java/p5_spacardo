@@ -15,6 +15,10 @@ class LocalDatabase extends GeneratedDatabase {
           ),
         ));
 
+  /// Uses an isolated SQL executor for automated tests only.
+  /// Production continues to use the default persistent database.
+  LocalDatabase.forTesting(super.executor);
+
   @override
   int get schemaVersion => 2;
 
