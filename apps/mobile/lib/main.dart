@@ -240,6 +240,47 @@ class _HomePageState extends State<_HomePage> {
     }
   }
 
+  Future<void> _renameDeck(DeckRecord deck) async {
+    final controller = TextEditingController(text: deck.title);
+    final title = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Rename deck'),
+        content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 120,
+            decoration: const InputDecoration(labelText: 'Deck name')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, controller.text.trim()),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (title == null || title.isEmpty || title == deck.title || !mounted) {
+      return;
+    }
+    try {
+      await widget.database.renameDeck(deck.id, title);
+      if (mounted) {
+        setState(() {
+          _reload();
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not rename deck: $error')));
+      }
+    }
+  }
+
   Future<void> _deleteDeck(DeckRecord deck) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -312,11 +353,16 @@ class _HomePageState extends State<_HomePage> {
               ListTile(
                 leading: const Icon(Icons.layers_outlined),
                 onTap: () => widget.onDeckSelected(deck.id),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  tooltip: 'Delete deck',
-                  onPressed: () => _deleteDeck(deck),
-                ),
+                trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  IconButton(
+                      icon: const Icon(Icons.edit_outlined),
+                      tooltip: 'Rename deck',
+                      onPressed: () => _renameDeck(deck)),
+                  IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      tooltip: 'Delete deck',
+                      onPressed: () => _deleteDeck(deck)),
+                ]),
                 title: Text(deck.title),
                 subtitle: Text(
                     '${l.created} ${DateTime.fromMillisecondsSinceEpoch(deck.createdAtMs).toLocal().toIso8601String().split('T').first}'),
@@ -344,11 +390,41 @@ class _PracticePageState extends State<_PracticePage> {
   String? lastOperationId;
   String? lastCardId;
   bool _ratingBusy = false;
+  Future<List<ManagedCardRecord>>? _allCards;
+  int _undoLookupGeneration = 0;
+
+  Future<void> _restoreUndo() async {
+    final deckId = widget.deckId;
+    final generation = ++_undoLookupGeneration;
+    if (deckId == null) return;
+    try {
+      final candidate = await widget.database.latestUndoForDeck(deckId);
+      if (!mounted ||
+          generation != _undoLookupGeneration ||
+          widget.deckId != deckId) {
+        return;
+      }
+      setState(() {
+        lastCardId = candidate?.cardId;
+        lastOperationId = candidate?.operationId;
+      });
+    } catch (error) {
+      debugPrint('Could not restore review undo: $error');
+    }
+  }
+
+  void _reloadAllCards() {
+    _allCards = widget.deckId == null
+        ? null
+        : widget.database.listManagedCards(widget.deckId!);
+  }
 
   @override
   void initState() {
     super.initState();
     _reload();
+    _reloadAllCards();
+    _restoreUndo();
   }
 
   @override
@@ -359,7 +435,16 @@ class _PracticePageState extends State<_PracticePage> {
       revealed = false;
       practiced.clear();
       _reload();
+      _onDeckChanged();
     }
+  }
+
+  // Reload Undo only when the selected deck changes.
+  void _onDeckChanged() {
+    lastCardId = null;
+    lastOperationId = null;
+    _reloadAllCards();
+    _restoreUndo();
   }
 
   void _reload() {
@@ -405,6 +490,7 @@ class _PracticePageState extends State<_PracticePage> {
       await widget.database.addBasicCard(widget.deckId!, values[0], values[1]);
       if (mounted) {
         setState(() {
+          _reloadAllCards();
           _reload();
           index = 0;
           practiced.clear();
@@ -417,6 +503,99 @@ class _PracticePageState extends State<_PracticePage> {
             content: Text(AppLocalizations.of(context)!.cardSaveError)));
       }
     }
+  }
+
+  Future<void> _editCard(ManagedCardRecord card) async {
+    final front = TextEditingController(text: card.front);
+    final back = TextEditingController(text: card.back);
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Edit card'),
+        content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+              controller: front,
+              maxLength: 5000,
+              decoration: const InputDecoration(labelText: 'Front')),
+          TextField(
+              controller: back,
+              maxLength: 5000,
+              decoration: const InputDecoration(labelText: 'Back')),
+        ])),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, [front.text, back.text]),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    front.dispose();
+    back.dispose();
+    if (result == null || !mounted) return;
+    try {
+      await widget.database.updateBasicCard(card.id, result[0], result[1]);
+      if (mounted) {
+        setState(() {
+          _reloadAllCards();
+          _reload();
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not edit card: $error')));
+      }
+    }
+  }
+
+  Future<void> _deleteCard(ManagedCardRecord card) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete card?'),
+        content:
+            const Text('Delete this card and its review history permanently?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.database.deleteBasicCard(card.id);
+      if (mounted) {
+        setState(() {
+          if (lastCardId == card.id) {
+            lastCardId = null;
+            lastOperationId = null;
+          }
+          practiced.remove(card.id);
+          _reloadAllCards();
+          _reload();
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not delete card: $error')));
+      }
+    }
+  }
+
+  String _dueLabel(int? dueAtMs) {
+    if (dueAtMs == null) return 'New / not scheduled';
+    final due = DateTime.fromMillisecondsSinceEpoch(dueAtMs).toLocal();
+    return 'Next review: ${due.toIso8601String().replaceFirst('T', ' ').split('.').first}';
   }
 
   /// Ratings are enabled only when the actual native FSRS library loads.
@@ -445,6 +624,7 @@ class _PracticePageState extends State<_PracticePage> {
           lastCardId = card.id;
           lastOperationId = operationId;
           practiced.add(card.id);
+          _reloadAllCards();
           revealed = false;
           _reload();
         });
@@ -471,6 +651,7 @@ class _PracticePageState extends State<_PracticePage> {
         lastOperationId = null;
         index = 0;
         revealed = false;
+        _reloadAllCards();
         _reload();
       });
     }
@@ -495,6 +676,48 @@ class _PracticePageState extends State<_PracticePage> {
                 onPressed: _addCard,
                 icon: const Icon(Icons.add),
                 label: Text(l.createCard)),
+            const SizedBox(height: 12),
+            ExpansionTile(
+              title: const Text('Manage all cards'),
+              subtitle:
+                  const Text('Edit, delete, or inspect the next review date'),
+              children: [
+                if (_allCards != null)
+                  FutureBuilder<List<ManagedCardRecord>>(
+                    future: _allCards,
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return const Text('Could not load cards');
+                      }
+                      if (!snapshot.hasData) {
+                        return const CircularProgressIndicator();
+                      }
+                      if (snapshot.data!.isEmpty) {
+                        return const Text('No cards in this deck');
+                      }
+                      return Column(children: [
+                        for (final item in snapshot.data!)
+                          ListTile(
+                            title: Text(item.front,
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                            subtitle: Text(_dueLabel(item.dueAtMs)),
+                            trailing:
+                                Row(mainAxisSize: MainAxisSize.min, children: [
+                              IconButton(
+                                  icon: const Icon(Icons.edit_outlined),
+                                  tooltip: 'Edit card',
+                                  onPressed: () => _editCard(item)),
+                              IconButton(
+                                  icon: const Icon(Icons.delete_outline),
+                                  tooltip: 'Delete card',
+                                  onPressed: () => _deleteCard(item)),
+                            ]),
+                          ),
+                      ]);
+                    },
+                  ),
+              ],
+            ),
             if (lastOperationId != null)
               TextButton.icon(
                   onPressed: _undo,
