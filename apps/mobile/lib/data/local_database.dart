@@ -72,6 +72,24 @@ extension DeckCrud on LocalDatabase {
     return id;
   }
 
+  /// Renames a deck without changing its card associations.
+  Future<bool> renameDeck(String deckId, String title) async {
+    final normalized = title.trim();
+    if (deckId.isEmpty || normalized.isEmpty || normalized.length > 120) {
+      throw ArgumentError('Invalid deck title or ID');
+    }
+    return transaction(() async {
+      final exists = await customSelect(
+        'SELECT id FROM decks WHERE id = ?',
+        variables: [Variable.withString(deckId)],
+      ).getSingleOrNull();
+      if (exists == null) return false;
+      await customStatement(
+          'UPDATE decks SET title = ? WHERE id = ?', [normalized, deckId]);
+      return true;
+    });
+  }
+
   /// Permanently deletes one deck and its cards in a single transaction.
   /// Child decks are protected. Shared notes are preserved until unused.
   Future<bool> deleteDeck(String deckId) async {
@@ -403,5 +421,121 @@ extension StudySnapshotQueries on LocalDatabase {
       state.readNullable<int>('last_reviewed'),
       state.read<int>('review_count'),
     );
+  }
+}
+
+/// Non-destructive management operations, preserving review history on edits.
+class ManagedCardRecord {
+  final String id;
+  final String front;
+  final String back;
+  final int? dueAtMs;
+  const ManagedCardRecord(this.id, this.front, this.back, this.dueAtMs);
+}
+
+class UndoCandidate {
+  final String cardId;
+  final String operationId;
+  const UndoCandidate(this.cardId, this.operationId);
+}
+
+extension Phase011Management on LocalDatabase {
+  /// Returns all cards, including cards not currently due for review.
+  Future<List<ManagedCardRecord>> listManagedCards(String deckId) async {
+    final rows = await customSelect('''
+      SELECT c.id AS id, f.value_html AS front, b.value_html AS back,
+        s.due_at_ms AS due_at_ms
+      FROM cards c
+      JOIN note_fields f ON f.note_id = c.note_id AND f.ordinal = 0
+      JOIN note_fields b ON b.note_id = c.note_id AND b.ordinal = 1
+      LEFT JOIN card_states s ON s.card_id = c.id
+      WHERE c.deck_id = ?
+      ORDER BY c.id
+    ''', variables: [Variable.withString(deckId)]).get();
+    return rows
+        .map((row) => ManagedCardRecord(
+              row.read<String>('id'),
+              row.read<String>('front'),
+              row.read<String>('back'),
+              row.readNullable<int>('due_at_ms'),
+            ))
+        .toList();
+  }
+
+  /// Edits Basic note fields. Shared notes are protected from cross-card edits.
+  Future<bool> updateBasicCard(String cardId, String front, String back) async {
+    final f = front.trim();
+    final b = back.trim();
+    if (cardId.isEmpty ||
+        f.isEmpty ||
+        b.isEmpty ||
+        f.length > 50000 ||
+        b.length > 50000) {
+      throw ArgumentError('Invalid card fields');
+    }
+    return transaction(() async {
+      final row = await customSelect(
+        'SELECT note_id FROM cards WHERE id = ?',
+        variables: [Variable.withString(cardId)],
+      ).getSingleOrNull();
+      if (row == null) return false;
+      final noteId = row.read<String>('note_id');
+      final uses = await customSelect(
+        'SELECT COUNT(*) AS n FROM cards WHERE note_id = ?',
+        variables: [Variable.withString(noteId)],
+      ).getSingle();
+      if (uses.read<int>('n') != 1) {
+        throw StateError('Editing shared notes is not supported yet');
+      }
+      await customStatement(
+          'UPDATE note_fields SET value_html = ? WHERE note_id = ? AND ordinal = 0',
+          [f, noteId]);
+      await customStatement(
+          'UPDATE note_fields SET value_html = ? WHERE note_id = ? AND ordinal = 1',
+          [b, noteId]);
+      return true;
+    });
+  }
+
+  /// Deletes one card and its review history atomically, retaining shared notes.
+  Future<bool> deleteBasicCard(String cardId) async {
+    if (cardId.isEmpty) throw ArgumentError('Card ID cannot be empty');
+    return transaction(() async {
+      final row = await customSelect(
+        'SELECT note_id FROM cards WHERE id = ?',
+        variables: [Variable.withString(cardId)],
+      ).getSingleOrNull();
+      if (row == null) return false;
+      final noteId = row.read<String>('note_id');
+      await customStatement(
+          'DELETE FROM review_events WHERE card_id = ?', [cardId]);
+      await customStatement(
+          'DELETE FROM card_states WHERE card_id = ?', [cardId]);
+      await customStatement('DELETE FROM cards WHERE id = ?', [cardId]);
+      final remaining = await customSelect(
+        'SELECT 1 FROM cards WHERE note_id = ? LIMIT 1',
+        variables: [Variable.withString(noteId)],
+      ).getSingleOrNull();
+      if (remaining == null) {
+        await customStatement(
+            'DELETE FROM note_fields WHERE note_id = ?', [noteId]);
+        await customStatement('DELETE FROM notes WHERE id = ?', [noteId]);
+      }
+      return true;
+    });
+  }
+
+  /// Finds the most recent active review within a deck after app restart.
+  Future<UndoCandidate?> latestUndoForDeck(String deckId) async {
+    final row = await customSelect('''
+      SELECT e.card_id AS card_id, e.operation_id AS operation_id
+      FROM review_events e
+      JOIN cards c ON c.id = e.card_id
+      WHERE c.deck_id = ? AND e.undone = 0
+      ORDER BY e.reviewed_at_ms DESC, e.rowid DESC LIMIT 1
+    ''', variables: [Variable.withString(deckId)]).getSingleOrNull();
+    if (row == null) return null;
+    return UndoCandidate(
+        row.read<String>('card_id'), row.read<String>('operation_id'));
   }
 }

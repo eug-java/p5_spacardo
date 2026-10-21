@@ -1,0 +1,58 @@
+# Rust
+**/target/
+**/*.rs.bk
+
+# Flutter / Dart
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub-cache/
+**/build/
+**/coverage/
+
+# Generated localization files
+**/lib/l10n/app_localizations*.dart
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Local databases
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.db-shm
+*.db-wal
+
+# Backups
+*.bak
+*.bak_*
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+
+# Operating system
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Local logs
+*.log

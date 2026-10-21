@@ -13,8 +13,7 @@ FsrsEngine? createFsrsEngine() {
     }
 
     if (Platform.isLinux) {
-      final configuredPath =
-      Platform.environment['SPACARDO_FSRS_LIBRARY'];
+      final configuredPath = Platform.environment['SPACARDO_FSRS_LIBRARY'];
 
       final libraryPath = configuredPath ??
           '${File(Platform.resolvedExecutable).parent.path}/libsrs_bridge.so';
