@@ -49,7 +49,10 @@ pub fn preview_review(
     elapsed_days: u32,
     desired_retention: f32,
 ) -> Result<ReviewChoices, String> {
-    let previous = previous.map(|m| srs_fsrs::Memory { stability: m.stability, difficulty: m.difficulty });
+    let previous = previous.map(|m| srs_fsrs::Memory {
+        stability: m.stability,
+        difficulty: m.difficulty,
+    });
     let result = srs_fsrs::preview(previous, elapsed_days, desired_retention)
         .map_err(|err| format!("{err:?}"))?;
     fn map(value: srs_fsrs::Outcome) -> NextReview {

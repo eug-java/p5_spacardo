@@ -10,12 +10,12 @@ class FsrsChoices {
   final FsrsChoice again, hard, good, easy;
   const FsrsChoices(this.again, this.hard, this.good, this.easy);
   FsrsChoice forRating(int rating) => switch (rating) {
-    1 => again,
-    2 => hard,
-    3 => good,
-    4 => easy,
-    _ => throw ArgumentError.value(rating, 'rating'),
-  };
+        1 => again,
+        2 => hard,
+        3 => good,
+        4 => easy,
+        _ => throw ArgumentError.value(rating, 'rating'),
+      };
 }
 
 abstract interface class FsrsEngine {

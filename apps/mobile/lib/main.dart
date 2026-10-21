@@ -3,7 +3,6 @@ import 'scheduler/study_review_service.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'data/local_database.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
 
 void main() => runApp(const P5SpacardoApp());
@@ -35,7 +34,12 @@ class _P5SpacardoAppState extends State<P5SpacardoApp> {
       for (final candidate in AppLocalizations.supportedLocales) {
         if (candidate.toLanguageTag() == tag) selected = candidate;
       }
-      if (mounted) setState(() { _locale = selected; _loadingPreferences = false; });
+      if (mounted) {
+        setState(() {
+          _locale = selected;
+          _loadingPreferences = false;
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _loadingPreferences = false);
     }
@@ -71,7 +75,9 @@ class _P5SpacardoAppState extends State<P5SpacardoApp> {
           for (final value in supported) {
             if (value.languageCode == requested.languageCode &&
                 value.countryCode == requested.countryCode &&
-                value.scriptCode == requested.scriptCode) return value;
+                value.scriptCode == requested.scriptCode) {
+              return value;
+            }
           }
           for (final value in supported) {
             if (value.languageCode == requested.languageCode) return value;
@@ -81,16 +87,27 @@ class _P5SpacardoAppState extends State<P5SpacardoApp> {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff246f88))),
-        darkTheme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff246f88), brightness: Brightness.dark)),
+        theme: ThemeData(
+            colorScheme:
+                ColorScheme.fromSeed(seedColor: const Color(0xff246f88))),
+        darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xff246f88),
+                brightness: Brightness.dark)),
         home: _loadingPreferences
-          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-          : _Shell(database: _database, locale: _locale, onLocaleChanged: _changeLocale),
+            ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+            : _Shell(
+                database: _database,
+                locale: _locale,
+                onLocaleChanged: _changeLocale),
       );
 }
 
 class _Shell extends StatefulWidget {
-  const _Shell({required this.database, required this.locale, required this.onLocaleChanged});
+  const _Shell(
+      {required this.database,
+      required this.locale,
+      required this.onLocaleChanged});
   final LocalDatabase database;
   final Locale? locale;
   final ValueChanged<Locale?> onLocaleChanged;
@@ -109,30 +126,58 @@ class _ShellState extends State<_Shell> {
     final l = AppLocalizations.of(context)!;
     final wide = MediaQuery.sizeOf(context).width >= 720;
     final labels = [l.overview, l.cards, l.importAction, l.settings];
-    final icons = [Icons.dashboard_outlined, Icons.school_outlined, Icons.file_open_outlined, Icons.settings_outlined];
+    final icons = [
+      Icons.dashboard_outlined,
+      Icons.school_outlined,
+      Icons.file_open_outlined,
+      Icons.settings_outlined
+    ];
     final pages = [
-      _HomePage(database: widget.database, onDeckSelected: (id) => setState(() { activeDeckId = id; selected = 1; })),
+      _HomePage(
+          database: widget.database,
+          onDeckSelected: (id) => setState(() {
+                activeDeckId = id;
+                selected = 1;
+              })),
       _PracticePage(database: widget.database, deckId: activeDeckId),
       const _ImportPage(),
-      _SettingsPage(locale: widget.locale, onLocaleChanged: widget.onLocaleChanged),
+      _SettingsPage(
+          locale: widget.locale, onLocaleChanged: widget.onLocaleChanged),
     ];
-    void navigate(int v) => setState(() { selected = v; showAnswer = false; });
+    void navigate(int v) => setState(() {
+          selected = v;
+          showAnswer = false;
+        });
     return Scaffold(
       appBar: AppBar(title: Text('P5 Spacardo · ${labels[selected]}')),
       body: Row(children: [
-        if (wide) NavigationRail(
-          selectedIndex: selected,
-          onDestinationSelected: navigate,
-          labelType: NavigationRailLabelType.all,
-          destinations: [for (var i = 0; i < labels.length; i++) NavigationRailDestination(icon: Icon(icons[i]), label: Text(labels[i]))],
-        ),
-        Expanded(child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 960), child: pages[selected]))),
+        if (wide)
+          NavigationRail(
+            selectedIndex: selected,
+            onDestinationSelected: navigate,
+            labelType: NavigationRailLabelType.all,
+            destinations: [
+              for (var i = 0; i < labels.length; i++)
+                NavigationRailDestination(
+                    icon: Icon(icons[i]), label: Text(labels[i]))
+            ],
+          ),
+        Expanded(
+            child: Center(
+                child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 960),
+                    child: pages[selected]))),
       ]),
-      bottomNavigationBar: wide ? null : NavigationBar(
-        selectedIndex: selected,
-        onDestinationSelected: navigate,
-        destinations: [for (var i = 0; i < labels.length; i++) NavigationDestination(icon: Icon(icons[i]), label: labels[i])],
-      ),
+      bottomNavigationBar: wide
+          ? null
+          : NavigationBar(
+              selectedIndex: selected,
+              onDestinationSelected: navigate,
+              destinations: [
+                for (var i = 0; i < labels.length; i++)
+                  NavigationDestination(icon: Icon(icons[i]), label: labels[i])
+              ],
+            ),
     );
   }
 }
@@ -161,12 +206,19 @@ class _HomePageState extends State<_HomePage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(AppLocalizations.of(context)!.createDeck),
-        content: TextField(controller: controller, autofocus: true, maxLength: 120,
-          decoration: InputDecoration(labelText: AppLocalizations.of(context)!.deckName)),
+        content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 120,
+            decoration: InputDecoration(
+                labelText: AppLocalizations.of(context)!.deckName)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppLocalizations.of(context)!.cancel)),
-          FilledButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: Text(AppLocalizations.of(context)!.save)),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(AppLocalizations.of(context)!.cancel)),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: Text(AppLocalizations.of(context)!.save)),
         ],
       ),
     );
@@ -174,10 +226,58 @@ class _HomePageState extends State<_HomePage> {
     if (title == null || title.isEmpty) return;
     try {
       await widget.database.addDeck(title);
-      if (mounted) setState(_reload);
+      if (mounted) {
+        setState(() {
+          _reload();
+        });
+      }
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context)!.saveDeckError}: $error')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                '${AppLocalizations.of(context)!.saveDeckError}: $error')));
+      }
+    }
+  }
+
+  Future<void> _deleteDeck(DeckRecord deck) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete deck?'),
+        content: Text(
+          'Delete "${deck.title}" and all its cards and review history? '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      final deleted = await widget.database.deleteDeck(deck.id);
+      if (!mounted) return;
+      setState(() {
+        _reload();
+      });
+      if (!deleted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Deck no longer exists.')),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete deck: $error')),
+      );
     }
   }
 
@@ -187,21 +287,40 @@ class _HomePageState extends State<_HomePage> {
     return ListView(padding: const EdgeInsets.all(24), children: [
       Text(l.prototypeTitle, style: const TextStyle(fontSize: 26)),
       const SizedBox(height: 12),
-      Card(child: Padding(padding: const EdgeInsets.all(18), child: Text(l.prototypeDescription))),
-      FilledButton.icon(onPressed: _addDeck, icon: const Icon(Icons.add), label: Text(AppLocalizations.of(context)!.createDeck)),
+      Card(
+          child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Text(l.prototypeDescription))),
+      FilledButton.icon(
+          onPressed: _addDeck,
+          icon: const Icon(Icons.add),
+          label: Text(AppLocalizations.of(context)!.createDeck)),
       FutureBuilder<List<DeckRecord>>(
         future: decks,
         builder: (context, snapshot) {
-          if (snapshot.hasError) return Text('${l.storageError}: ${snapshot.error}');
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          if (snapshot.data!.isEmpty) return ListTile(title: Text(l.noSavedDecks));
+          if (snapshot.hasError) {
+            return Text('${l.storageError}: ${snapshot.error}');
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.data!.isEmpty) {
+            return ListTile(title: Text(l.noSavedDecks));
+          }
           return Column(children: [
-            for (final deck in snapshot.data!) ListTile(
-              leading: const Icon(Icons.layers_outlined),
-              onTap: () => widget.onDeckSelected(deck.id),
-              title: Text(deck.title),
-              subtitle: Text('${l.created} ${DateTime.fromMillisecondsSinceEpoch(deck.createdAtMs).toLocal().toIso8601String().split('T').first}'),
-            ),
+            for (final deck in snapshot.data!)
+              ListTile(
+                leading: const Icon(Icons.layers_outlined),
+                onTap: () => widget.onDeckSelected(deck.id),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Delete deck',
+                  onPressed: () => _deleteDeck(deck),
+                ),
+                title: Text(deck.title),
+                subtitle: Text(
+                    '${l.created} ${DateTime.fromMillisecondsSinceEpoch(deck.createdAtMs).toLocal().toIso8601String().split('T').first}'),
+              ),
           ]);
         },
       ),
@@ -227,34 +346,76 @@ class _PracticePageState extends State<_PracticePage> {
   bool _ratingBusy = false;
 
   @override
-  void initState() { super.initState(); _reload(); }
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
   @override
   void didUpdateWidget(covariant _PracticePage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.deckId != widget.deckId) { index = 0; revealed = false; practiced.clear(); _reload(); }
+    if (oldWidget.deckId != widget.deckId) {
+      index = 0;
+      revealed = false;
+      practiced.clear();
+      _reload();
+    }
   }
-  void _reload() { _cards = widget.deckId == null ? null : widget.database.listBasicCards(widget.deckId!); }
+
+  void _reload() {
+    _cards = widget.deckId == null
+        ? null
+        : widget.database.listBasicCards(widget.deckId!);
+  }
 
   Future<void> _addCard() async {
     if (widget.deckId == null) return;
-    final front = TextEditingController(); final back = TextEditingController();
-    final values = await showDialog<List<String>>(context: context, builder: (dialogContext) {
-      final l = AppLocalizations.of(context)!;
-      return AlertDialog(title: Text(l.createCard), content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: front, decoration: InputDecoration(labelText: l.cardFront), maxLength: 5000),
-        TextField(controller: back, decoration: InputDecoration(labelText: l.cardBack), maxLength: 5000),
-      ]), actions: [
-        TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(l.cancel)),
-        FilledButton(onPressed: () => Navigator.pop(dialogContext, [front.text, back.text]), child: Text(l.save)),
-      ]);
-    });
-    front.dispose(); back.dispose();
+    final front = TextEditingController();
+    final back = TextEditingController();
+    final values = await showDialog<List<String>>(
+        context: context,
+        builder: (dialogContext) {
+          final l = AppLocalizations.of(context)!;
+          return AlertDialog(
+              title: Text(l.createCard),
+              content: Column(mainAxisSize: MainAxisSize.min, children: [
+                TextField(
+                    controller: front,
+                    decoration: InputDecoration(labelText: l.cardFront),
+                    maxLength: 5000),
+                TextField(
+                    controller: back,
+                    decoration: InputDecoration(labelText: l.cardBack),
+                    maxLength: 5000),
+              ]),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: Text(l.cancel)),
+                FilledButton(
+                    onPressed: () =>
+                        Navigator.pop(dialogContext, [front.text, back.text]),
+                    child: Text(l.save)),
+              ]);
+        });
+    front.dispose();
+    back.dispose();
     if (values == null) return;
     try {
       await widget.database.addBasicCard(widget.deckId!, values[0], values[1]);
-      if (mounted) setState(() { _reload(); index = 0; practiced.clear(); revealed = false; });
-    } catch (_) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppLocalizations.of(context)!.cardSaveError)));
+      if (mounted) {
+        setState(() {
+          _reload();
+          index = 0;
+          practiced.clear();
+          revealed = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(AppLocalizations.of(context)!.cardSaveError)));
+      }
     }
   }
 
@@ -263,15 +424,20 @@ class _PracticePageState extends State<_PracticePage> {
     if (_ratingBusy) return;
     final engine = createFsrsEngine();
     if (engine == null) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.fsrsNotice)));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(AppLocalizations.of(context)!.fsrsNotice)));
+      }
       return;
     }
     setState(() => _ratingBusy = true);
-    final operationId = '${DateTime.now().microsecondsSinceEpoch}_${card.id}_$rating';
+    final operationId =
+        '${DateTime.now().microsecondsSinceEpoch}_${card.id}_$rating';
     try {
       final saved = await StudyReviewService(widget.database, engine).answer(
-        cardId: card.id, rating: rating, operationId: operationId,
+        cardId: card.id,
+        rating: rating,
+        operationId: operationId,
         now: DateTime.now().toUtc(),
       );
       if (saved && mounted) {
@@ -285,8 +451,10 @@ class _PracticePageState extends State<_PracticePage> {
       }
     } catch (error) {
       // Do not silently substitute a heuristic scheduling outcome.
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.storageError)));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(AppLocalizations.of(context)!.storageError)));
+      }
     } finally {
       if (mounted) setState(() => _ratingBusy = false);
     }
@@ -294,45 +462,87 @@ class _PracticePageState extends State<_PracticePage> {
 
   Future<void> _undo() async {
     if (lastCardId == null || lastOperationId == null) return;
-    final restored = await widget.database.undoLastReview(lastCardId!, lastOperationId!);
-    if (restored && mounted) setState(() {
-      practiced.remove(lastCardId); lastCardId = null; lastOperationId = null;
-      index = 0; revealed = false; _reload();
-    });
+    final restored =
+        await widget.database.undoLastReview(lastCardId!, lastOperationId!);
+    if (restored && mounted) {
+      setState(() {
+        practiced.remove(lastCardId);
+        lastCardId = null;
+        lastOperationId = null;
+        index = 0;
+        revealed = false;
+        _reload();
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
     if (widget.deckId == null) return Center(child: Text(l.selectDeckToStudy));
-    return FutureBuilder<List<BasicCardRecord>>(future: _cards, builder: (context, snapshot) {
-      if (snapshot.hasError) return Center(child: Text(l.storageError));
-      if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-      final cards = snapshot.data!.where((e) => !practiced.contains(e.id)).toList();
-      final card = cards.isEmpty ? null : cards.first;
-      return ListView(padding: const EdgeInsets.all(24), children: [
-        FilledButton.icon(onPressed: _addCard, icon: const Icon(Icons.add), label: Text(l.createCard)),
-        if (lastOperationId != null) TextButton.icon(
-          onPressed: _undo, icon: const Icon(Icons.undo), label: Text(l.undoReview)),
-        const SizedBox(height: 16),
-        if (card == null) Center(child: Text(l.noCardsToPractice)) else ...[
-          Card(child: Padding(padding: const EdgeInsets.all(32), child: Column(children: [
-            Text(card.front, style: Theme.of(context).textTheme.headlineMedium, textAlign: TextAlign.center),
-            if (revealed) ...[const Divider(height: 36), Text(card.back, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center)],
-          ]))),
-          if (!revealed) FilledButton(onPressed: () => setState(() => revealed = true), child: Text(l.showAnswer))
-          else ...[
-            Text(l.provisionalSchedulingNotice, textAlign: TextAlign.center),
-            Wrap(alignment: WrapAlignment.center, spacing: 8, children: [
-              OutlinedButton(onPressed: _ratingBusy ? null : () => _rate(card, 1), child: Text(l.again)),
-              OutlinedButton(onPressed: _ratingBusy ? null : () => _rate(card, 2), child: Text(l.hard)),
-              OutlinedButton(onPressed: _ratingBusy ? null : () => _rate(card, 3), child: Text(l.good)),
-              OutlinedButton(onPressed: _ratingBusy ? null : () => _rate(card, 4), child: Text(l.easy)),
-            ])
-          ],
-        ]
-      ]);
-    });
+    return FutureBuilder<List<BasicCardRecord>>(
+        future: _cards,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) return Center(child: Text(l.storageError));
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final cards =
+              snapshot.data!.where((e) => !practiced.contains(e.id)).toList();
+          final card = cards.isEmpty ? null : cards.first;
+          return ListView(padding: const EdgeInsets.all(24), children: [
+            FilledButton.icon(
+                onPressed: _addCard,
+                icon: const Icon(Icons.add),
+                label: Text(l.createCard)),
+            if (lastOperationId != null)
+              TextButton.icon(
+                  onPressed: _undo,
+                  icon: const Icon(Icons.undo),
+                  label: Text(l.undoReview)),
+            const SizedBox(height: 16),
+            if (card == null)
+              Center(child: Text(l.noCardsToPractice))
+            else ...[
+              Card(
+                  child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(children: [
+                        Text(card.front,
+                            style: Theme.of(context).textTheme.headlineMedium,
+                            textAlign: TextAlign.center),
+                        if (revealed) ...[
+                          const Divider(height: 36),
+                          Text(card.back,
+                              style: Theme.of(context).textTheme.titleLarge,
+                              textAlign: TextAlign.center)
+                        ],
+                      ]))),
+              if (!revealed)
+                FilledButton(
+                    onPressed: () => setState(() => revealed = true),
+                    child: Text(l.showAnswer))
+              else ...[
+                Text(l.provisionalSchedulingNotice,
+                    textAlign: TextAlign.center),
+                Wrap(alignment: WrapAlignment.center, spacing: 8, children: [
+                  OutlinedButton(
+                      onPressed: _ratingBusy ? null : () => _rate(card, 1),
+                      child: Text(l.again)),
+                  OutlinedButton(
+                      onPressed: _ratingBusy ? null : () => _rate(card, 2),
+                      child: Text(l.hard)),
+                  OutlinedButton(
+                      onPressed: _ratingBusy ? null : () => _rate(card, 3),
+                      child: Text(l.good)),
+                  OutlinedButton(
+                      onPressed: _ratingBusy ? null : () => _rate(card, 4),
+                      child: Text(l.easy)),
+                ])
+              ],
+            ]
+          ]);
+        });
   }
 }
 
@@ -345,8 +555,10 @@ class _ImportPage extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         const Icon(Icons.file_open_outlined, size: 60),
-        const SizedBox(height: 16), Text(l.importTitle),
-        const SizedBox(height: 8), Text(l.importNotice, textAlign: TextAlign.center),
+        const SizedBox(height: 16),
+        Text(l.importTitle),
+        const SizedBox(height: 8),
+        Text(l.importNotice, textAlign: TextAlign.center),
       ]),
     );
   }
@@ -366,15 +578,23 @@ class _SettingsPage extends StatelessWidget {
         trailing: DropdownButton<String>(
           value: locale?.toLanguageTag() ?? 'system',
           onChanged: (value) {
-            if (value == 'system') { onLocaleChanged(null); return; }
+            if (value == 'system') {
+              onLocaleChanged(null);
+              return;
+            }
             for (final option in AppLocalizations.supportedLocales) {
-              if (option.toLanguageTag() == value) { onLocaleChanged(option); break; }
+              if (option.toLanguageTag() == value) {
+                onLocaleChanged(option);
+                break;
+              }
             }
           },
           items: [
             DropdownMenuItem(value: 'system', child: Text(l.systemLanguage)),
             for (final option in AppLocalizations.supportedLocales)
-              DropdownMenuItem(value: option.toLanguageTag(), child: Text(option.toLanguageTag())),
+              DropdownMenuItem(
+                  value: option.toLanguageTag(),
+                  child: Text(option.toLanguageTag())),
           ],
         ),
       ),

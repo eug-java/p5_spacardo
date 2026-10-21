@@ -35,7 +35,6 @@ class LocalDatabase extends GeneratedDatabase {
       );
 }
 
-
 class DeckRecord {
   final String id;
   final String title;
@@ -48,11 +47,13 @@ extension DeckCrud on LocalDatabase {
     final rows = await customSelect(
       'SELECT id, title, created_at_ms FROM decks ORDER BY title COLLATE NOCASE',
     ).get();
-    return rows.map((row) => DeckRecord(
-      row.read<String>('id'),
-      row.read<String>('title'),
-      row.read<int>('created_at_ms'),
-    )).toList();
+    return rows
+        .map((row) => DeckRecord(
+              row.read<String>('id'),
+              row.read<String>('title'),
+              row.read<int>('created_at_ms'),
+            ))
+        .toList();
   }
 
   Future<String> addDeck(String title) async {
@@ -70,10 +71,67 @@ extension DeckCrud on LocalDatabase {
     );
     return id;
   }
+
+  /// Permanently deletes one deck and its cards in a single transaction.
+  /// Child decks are protected. Shared notes are preserved until unused.
+  Future<bool> deleteDeck(String deckId) async {
+    if (deckId.isEmpty) throw ArgumentError('Deck ID cannot be empty');
+    return transaction(() async {
+      final target = await customSelect(
+        'SELECT id FROM decks WHERE id = ?',
+        variables: [Variable.withString(deckId)],
+      ).getSingleOrNull();
+      if (target == null) return false;
+
+      final children = await customSelect(
+        'SELECT 1 FROM decks WHERE parent_id = ? LIMIT 1',
+        variables: [Variable.withString(deckId)],
+      ).getSingleOrNull();
+      if (children != null) {
+        throw StateError('Move or delete child decks first');
+      }
+
+      // Preserve note IDs before deleting their cards. A note may be used
+      // by other decks, so only delete it if no cards reference it anymore.
+      final notes = await customSelect(
+        'SELECT DISTINCT note_id FROM cards WHERE deck_id = ?',
+        variables: [Variable.withString(deckId)],
+      ).get();
+
+      // Remove dependent records explicitly, even if foreign-key
+      // enforcement was not enabled by an older database connection.
+      await customStatement('''
+        DELETE FROM review_events
+        WHERE card_id IN (SELECT id FROM cards WHERE deck_id = ?)
+      ''', [deckId]);
+      await customStatement('''
+        DELETE FROM card_states
+        WHERE card_id IN (SELECT id FROM cards WHERE deck_id = ?)
+      ''', [deckId]);
+      await customStatement('DELETE FROM cards WHERE deck_id = ?', [deckId]);
+      for (final row in notes) {
+        final noteId = row.read<String>('note_id');
+        await customStatement('''
+          DELETE FROM note_fields
+          WHERE note_id = ? AND NOT EXISTS (
+            SELECT 1 FROM cards WHERE note_id = ?
+          )
+        ''', [noteId, noteId]);
+        await customStatement('''
+          DELETE FROM notes
+          WHERE id = ? AND NOT EXISTS (
+            SELECT 1 FROM cards WHERE note_id = ?
+          )
+        ''', [noteId, noteId]);
+      }
+      await customStatement('DELETE FROM decks WHERE id = ?', [deckId]);
+      return true;
+    });
+  }
 }
 
-String _deckRandomSuffix() => Random.secure().nextInt(0x7fffffff).toRadixString(36);
-
+String _deckRandomSuffix() =>
+    Random.secure().nextInt(0x7fffffff).toRadixString(36);
 
 /// Basic note/card support; scheduling is provisional until Rust FSRS FFI is integrated.
 class BasicCardRecord {
@@ -82,14 +140,17 @@ class BasicCardRecord {
   final String front;
   final String back;
   final int? dueAtMs;
-  const BasicCardRecord(this.id, this.deckId, this.front, this.back, this.dueAtMs);
+  const BasicCardRecord(
+      this.id, this.deckId, this.front, this.back, this.dueAtMs);
 }
 
-String _newId() => '${DateTime.now().microsecondsSinceEpoch.toRadixString(16)}_${_deckRandomSuffix()}';
+String _newId() =>
+    '${DateTime.now().microsecondsSinceEpoch.toRadixString(16)}_${_deckRandomSuffix()}';
 
 extension BasicCardCrud on LocalDatabase {
   Future<void> ensureBasicType() async {
-    await customStatement('INSERT OR IGNORE INTO note_types (id, name, css) VALUES (?, ?, ?)',
+    await customStatement(
+        'INSERT OR IGNORE INTO note_types (id, name, css) VALUES (?, ?, ?)',
         ['basic', 'Basic', '']);
   }
 
@@ -104,15 +165,20 @@ extension BasicCardCrud on LocalDatabase {
     final cardId = _newId();
     await transaction(() async {
       await ensureBasicType();
-      await customStatement('INSERT INTO notes (id, note_type_id, created_at_ms) VALUES (?, ?, ?)',
+      await customStatement(
+          'INSERT INTO notes (id, note_type_id, created_at_ms) VALUES (?, ?, ?)',
           [noteId, 'basic', DateTime.now().millisecondsSinceEpoch]);
-      await customStatement('INSERT INTO note_fields (note_id, ordinal, value_html) VALUES (?, ?, ?)',
+      await customStatement(
+          'INSERT INTO note_fields (note_id, ordinal, value_html) VALUES (?, ?, ?)',
           [noteId, 0, front.trim()]);
-      await customStatement('INSERT INTO note_fields (note_id, ordinal, value_html) VALUES (?, ?, ?)',
+      await customStatement(
+          'INSERT INTO note_fields (note_id, ordinal, value_html) VALUES (?, ?, ?)',
           [noteId, 1, back.trim()]);
-      await customStatement('INSERT INTO cards (id, note_id, deck_id, template_ordinal) VALUES (?, ?, ?, ?)',
+      await customStatement(
+          'INSERT INTO cards (id, note_id, deck_id, template_ordinal) VALUES (?, ?, ?, ?)',
           [cardId, noteId, deckId, 0]);
-      await customStatement('INSERT INTO card_states (card_id, phase) VALUES (?, ?)',
+      await customStatement(
+          'INSERT INTO card_states (card_id, phase) VALUES (?, ?)',
           [cardId, 'new']);
     });
     return cardId;
@@ -129,12 +195,19 @@ extension BasicCardCrud on LocalDatabase {
       WHERE c.deck_id = ? AND c.suspended = 0
         AND (s.due_at_ms IS NULL OR s.due_at_ms <= ?)
       ORDER BY COALESCE(s.due_at_ms, 0), c.id
-    ''', variables: [Variable.withString(deckId), Variable.withInt(DateTime.now().millisecondsSinceEpoch)]).get();
-    return rows.map((r) => BasicCardRecord(
-      r.read<String>('id'), r.read<String>('deck_id'),
-      r.read<String>('front'), r.read<String>('back'),
-      r.readNullable<int>('due_at_ms'),
-    )).toList();
+    ''', variables: [
+      Variable.withString(deckId),
+      Variable.withInt(DateTime.now().millisecondsSinceEpoch)
+    ]).get();
+    return rows
+        .map((r) => BasicCardRecord(
+              r.read<String>('id'),
+              r.read<String>('deck_id'),
+              r.read<String>('front'),
+              r.read<String>('back'),
+              r.readNullable<int>('due_at_ms'),
+            ))
+        .toList();
   }
 
   /// Legacy provisional scheduling was deliberately removed in Phase 0.6.
@@ -142,7 +215,8 @@ extension BasicCardCrud on LocalDatabase {
   /// computed by the Rust FSRS adapter. Never silently substitute intervals.
   @Deprecated('Use commitFsrsReview with a validated Rust FSRS outcome')
   Future<bool> recordPractice(String cardId, int rating, String operationId) {
-    throw UnsupportedError('FSRS bridge is not yet initialized. Rating disabled.');
+    throw UnsupportedError(
+        'FSRS bridge is not yet initialized. Rating disabled.');
   }
 
   /// Only the latest non-undone review of this card may be reverted.
@@ -153,17 +227,28 @@ extension BasicCardCrud on LocalDatabase {
         WHERE card_id = ? AND undone = 0
         ORDER BY reviewed_at_ms DESC, rowid DESC LIMIT 1
       ''', variables: [Variable.withString(cardId)]).getSingleOrNull();
-      if (latest == null || latest.read<String>('operation_id') != operationId) return false;
-      final state = jsonDecode(latest.read<String>('before_state_json')) as Map<String, dynamic>;
+      if (latest == null ||
+          latest.read<String>('operation_id') != operationId) {
+        return false;
+      }
+      final state = jsonDecode(latest.read<String>('before_state_json'))
+          as Map<String, dynamic>;
       await customStatement('''
         UPDATE card_states SET phase=?, due_at_ms=?, stability=?, difficulty=? WHERE card_id=?
-      ''', [state['phase'], state['due_at_ms'], state['stability'], state['difficulty'], cardId]);
-      await customStatement('UPDATE review_events SET undone=1 WHERE operation_id=?', [operationId]);
+      ''', [
+        state['phase'],
+        state['due_at_ms'],
+        state['stability'],
+        state['difficulty'],
+        cardId
+      ]);
+      await customStatement(
+          'UPDATE review_events SET undone=1 WHERE operation_id=?',
+          [operationId]);
       return true;
     });
   }
 }
-
 
 /// Result of the Rust FSRS scheduling engine. This is not a scheduling
 /// implementation: callers MUST obtain these values from the FSRS core.
@@ -181,9 +266,14 @@ class FsrsReviewOutcome {
   });
 
   void validate() {
-    if (!stability.isFinite || stability <= 0 ||
-        !difficulty.isFinite || difficulty <= 0 || difficulty > 10 ||
-        !intervalDays.isFinite || intervalDays < 0 || intervalDays > 36500 ||
+    if (!stability.isFinite ||
+        stability <= 0 ||
+        !difficulty.isFinite ||
+        difficulty <= 0 ||
+        difficulty > 10 ||
+        !intervalDays.isFinite ||
+        intervalDays < 0 ||
+        intervalDays > 36500 ||
         !const ['learning', 'review', 'relearning'].contains(phase)) {
       throw ArgumentError('Invalid FSRS review outcome');
     }
@@ -202,18 +292,23 @@ extension FsrsReviewPersistence on LocalDatabase {
     required FsrsReviewOutcome outcome,
     required int reviewedAtMs,
   }) async {
-    if (rating < 1 || rating > 4 || operationId.isEmpty || expectedReviewCount < 0) {
+    if (rating < 1 ||
+        rating > 4 ||
+        operationId.isEmpty ||
+        expectedReviewCount < 0) {
       throw ArgumentError('Invalid review request');
     }
     outcome.validate();
-    final dueMs = reviewedAtMs + (outcome.intervalDays * Duration.millisecondsPerDay).round();
+    final dueMs = reviewedAtMs +
+        (outcome.intervalDays * Duration.millisecondsPerDay).round();
     return transaction(() async {
       final prior = await customSelect(
         'SELECT card_id, rating, undone FROM review_events WHERE operation_id = ?',
         variables: [Variable.withString(operationId)],
       ).getSingleOrNull();
       if (prior != null) {
-        if (prior.read<String>('card_id') != cardId || prior.read<int>('rating') != rating) {
+        if (prior.read<String>('card_id') != cardId ||
+            prior.read<int>('rating') != rating) {
           throw StateError('Operation ID collision');
         }
         if (prior.read<int>('undone') != 0) {
@@ -254,13 +349,25 @@ extension FsrsReviewPersistence on LocalDatabase {
       };
       await customStatement('''
         UPDATE card_states SET phase=?, due_at_ms=?, stability=?, difficulty=? WHERE card_id=?
-      ''', [outcome.phase, dueMs, outcome.stability, outcome.difficulty, cardId]);
+      ''', [
+        outcome.phase,
+        dueMs,
+        outcome.stability,
+        outcome.difficulty,
+        cardId
+      ]);
       await customStatement('''
         INSERT INTO review_events
           (id, operation_id, card_id, reviewed_at_ms, rating, before_state_json, after_state_json)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       ''', [
-        _newId(), operationId, cardId, reviewedAtMs, rating, jsonEncode(before), jsonEncode(after)
+        _newId(),
+        operationId,
+        cardId,
+        reviewedAtMs,
+        rating,
+        jsonEncode(before),
+        jsonEncode(after)
       ]);
       return true;
     });

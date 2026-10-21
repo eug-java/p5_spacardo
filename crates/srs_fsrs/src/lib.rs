@@ -51,8 +51,12 @@ pub fn preview(
         return Err(ScheduleError::InvalidRetention);
     }
     if let Some(p) = previous {
-        if !p.stability.is_finite() || !p.difficulty.is_finite()
-            || p.stability <= 0.0 || p.difficulty <= 0.0 || p.difficulty > 10.0 {
+        if !p.stability.is_finite()
+            || !p.difficulty.is_finite()
+            || p.stability <= 0.0
+            || p.difficulty <= 0.0
+            || p.difficulty > 10.0
+        {
             return Err(ScheduleError::InvalidState);
         }
     }
@@ -87,7 +91,10 @@ mod tests {
 
     #[test]
     fn invalid_retention_rejected() {
-        assert_eq!(preview(None, 0, f32::NAN), Err(ScheduleError::InvalidRetention));
+        assert_eq!(
+            preview(None, 0, f32::NAN),
+            Err(ScheduleError::InvalidRetention)
+        );
         assert_eq!(preview(None, 0, 1.0), Err(ScheduleError::InvalidRetention));
     }
 
@@ -103,13 +110,39 @@ mod tests {
 
     #[test]
     fn invalid_elapsed_or_memory_is_not_silently_normalized() {
-        assert!(preview(Some(Memory {stability:f32::NAN, difficulty:2.0}), 1, 0.9).is_err());
-        assert!(preview(Some(Memory {stability:1.0, difficulty:f32::INFINITY}), 1, 0.9).is_err());
+        assert!(preview(
+            Some(Memory {
+                stability: f32::NAN,
+                difficulty: 2.0
+            }),
+            1,
+            0.9
+        )
+        .is_err());
+        assert!(preview(
+            Some(Memory {
+                stability: 1.0,
+                difficulty: f32::INFINITY
+            }),
+            1,
+            0.9
+        )
+        .is_err());
         assert!(preview(None, 0, 0.69).is_err());
     }
 
     #[test]
     fn invalid_state_rejected() {
-        assert_eq!(preview(Some(Memory { stability: -1.0, difficulty: 3.0 }), 2, 0.9), Err(ScheduleError::InvalidState));
+        assert_eq!(
+            preview(
+                Some(Memory {
+                    stability: -1.0,
+                    difficulty: 3.0
+                }),
+                2,
+                0.9
+            ),
+            Err(ScheduleError::InvalidState)
+        );
     }
 }

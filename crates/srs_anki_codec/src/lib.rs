@@ -39,27 +39,53 @@ fn safe_path(p: &str) -> bool {
 }
 
 pub fn inspect_archive(bytes: &[u8]) -> Result<ArchiveSummary, AuditError> {
-    if bytes.len() > MAX_ARCHIVE_BYTES { return Err(AuditError::TooLarge); }
+    if bytes.len() > MAX_ARCHIVE_BYTES {
+        return Err(AuditError::TooLarge);
+    }
     let mut archive = ZipArchive::new(Cursor::new(bytes)).map_err(|_| AuditError::InvalidZip)?;
-    if archive.len() > MAX_ENTRIES { return Err(AuditError::TooManyEntries); }
+    if archive.len() > MAX_ENTRIES {
+        return Err(AuditError::TooManyEntries);
+    }
     let mut seen = HashSet::new();
     let mut total = 0u64;
     let mut collection = None;
     let mut media_manifest = false;
     for index in 0..archive.len() {
-        let entry = archive.by_index(index).map_err(|_| AuditError::InvalidZip)?;
-        let name = entry.name();
-        if !safe_path(name) || entry.encrypted() || entry.unix_mode().map(|m| m & 0o170000 == 0o120000).unwrap_or(false) {
+        let entry = archive
+            .by_index(index)
+            .map_err(|_| AuditError::InvalidZip)?;
+        let name = entry.name().map_err(|_| AuditError::InvalidZip)?;
+        let name = name.as_ref();
+        if !safe_path(name)
+            || entry.encrypted()
+            || entry
+                .unix_mode()
+                .map(|m| m & 0o170000 == 0o120000)
+                .unwrap_or(false)
+        {
             return Err(AuditError::UnsafeEntry(name.into()));
         }
-        if !seen.insert(name.to_owned()) { return Err(AuditError::DuplicateEntry(name.into())); }
-        if entry.size() > MAX_ENTRY_BYTES { return Err(AuditError::OversizedContent); }
-        total = total.checked_add(entry.size()).ok_or(AuditError::OversizedContent)?;
-        if total > MAX_TOTAL_UNCOMPRESSED { return Err(AuditError::OversizedContent); }
-        if matches!(name, "collection.anki2" | "collection.anki21" | "collection.anki21b") {
+        if !seen.insert(name.to_owned()) {
+            return Err(AuditError::DuplicateEntry(name.into()));
+        }
+        if entry.size() > MAX_ENTRY_BYTES {
+            return Err(AuditError::OversizedContent);
+        }
+        total = total
+            .checked_add(entry.size())
+            .ok_or(AuditError::OversizedContent)?;
+        if total > MAX_TOTAL_UNCOMPRESSED {
+            return Err(AuditError::OversizedContent);
+        }
+        if matches!(
+            name,
+            "collection.anki2" | "collection.anki21" | "collection.anki21b"
+        ) {
             collection = Some(name.to_owned());
         }
-        if name == "media" { media_manifest = true; }
+        if name == "media" {
+            media_manifest = true;
+        }
     }
     Ok(ArchiveSummary {
         entries: archive.len(),
@@ -78,7 +104,10 @@ mod tests {
     }
     #[test]
     fn oversized_input_is_rejected() {
-        assert_eq!(inspect_archive(&vec![0u8; MAX_ARCHIVE_BYTES + 1]), Err(AuditError::TooLarge));
+        assert_eq!(
+            inspect_archive(&vec![0u8; MAX_ARCHIVE_BYTES + 1]),
+            Err(AuditError::TooLarge)
+        );
     }
     #[test]
     fn unsafe_paths_are_rejected() {

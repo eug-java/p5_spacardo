@@ -1,3 +1,10 @@
+## Phase 0.10.2 - Rust FFI safety and formatting
+
+- Marked `spacardo_fsrs_preview_v1` unsafe and documented the pointer preconditions.
+- Updated Rust FFI tests to use explicit unsafe call sites.
+- Applied rustfmt formatting where the tool was available.
+- Verification still requires cargo fmt, clippy, tests, and release build on an installed Rust toolchain.
+
 ## Phase 0.9 - Native FFI and review-persistence hardening
 
 - Fix missing Rust ABI module imports.

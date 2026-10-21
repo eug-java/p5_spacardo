@@ -27,8 +27,8 @@ class StudyReviewService {
     if (last != null && timestamp < last) {
       throw StateError('Clock precedes the last review');
     }
-    final elapsed = last == null ? 0 :
-        (timestamp - last) ~/ Duration.millisecondsPerDay;
+    final elapsed =
+        last == null ? 0 : (timestamp - last) ~/ Duration.millisecondsPerDay;
     final choices = engine.preview(
       stability: snapshot.stability,
       difficulty: snapshot.difficulty,
