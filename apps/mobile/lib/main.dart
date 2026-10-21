@@ -103,6 +103,27 @@ class _P5SpacardoAppState extends State<P5SpacardoApp> {
       );
 }
 
+/// In-memory UI test entry point. Never opens the production SQLite database.
+/// The caller owns and closes [database].
+@visibleForTesting
+class SpacardoTestHarness extends StatelessWidget {
+  const SpacardoTestHarness({super.key, required this.database});
+
+  final LocalDatabase database;
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: _Shell(
+          database: database,
+          locale: const Locale('en'),
+          onLocaleChanged: (_) {},
+        ),
+      );
+}
+
 class _Shell extends StatefulWidget {
   const _Shell(
       {required this.database,
